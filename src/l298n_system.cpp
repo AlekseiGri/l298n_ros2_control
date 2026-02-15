@@ -9,7 +9,7 @@
 #include <stdexcept>
 
 // pigpio
-#include <pigpio.h>
+#include <pigpiod_if2.h>
 
 namespace l298n_hardware
 {
@@ -36,7 +36,11 @@ hardware_interface::CallbackReturn L298NSystem::on_init(
       max_wheel_rad_s_ = std::stod(info.hardware_parameters.at("max_wheel_rad_s"));
     }
   } catch (const std::exception & e) {
-    RCLCPP_ERROR(rclcpp::get_logger("L298NSystem"), "Param parse error: %s", e.what());
+    RCLCPP_ERROR(
+      rclcpp::get_logger("L298NSystem"),
+      "Parameter parsing failed: %s", e.what()
+    );
+
     return hardware_interface::CallbackReturn::ERROR;
   }
 
@@ -47,8 +51,26 @@ std::vector<hardware_interface::StateInterface>
 L298NSystem::export_state_interfaces()
 {
   std::vector<hardware_interface::StateInterface> states;
-  states.emplace_back("left_wheel_joint",  hardware_interface::HW_IF_VELOCITY, &left_state_);
-  states.emplace_back("right_wheel_joint", hardware_interface::HW_IF_VELOCITY, &right_state_);
+  states.emplace_back(
+    "left_wheel_joint",
+    hardware_interface::HW_IF_POSITION,
+    &left_pos_);
+
+  states.emplace_back(
+    "left_wheel_joint",
+    hardware_interface::HW_IF_VELOCITY,
+    &left_state_);
+
+  states.emplace_back(
+    "right_wheel_joint",
+    hardware_interface::HW_IF_POSITION,
+    &right_pos_);
+
+  states.emplace_back(
+    "right_wheel_joint",
+    hardware_interface::HW_IF_VELOCITY,
+    &right_state_);
+
   return states;
 }
 
@@ -64,49 +86,81 @@ L298NSystem::export_command_interfaces()
 hardware_interface::CallbackReturn L298NSystem::on_activate(
   const rclcpp_lifecycle::State &)
 {
-  if (gpioInitialise() < 0) {
-    RCLCPP_ERROR(rclcpp::get_logger("L298NSystem"), "pigpio init failed");
+  pi_ = pigpio_start(NULL, NULL);
+  if (pi_ < 0)
+  {
+    RCLCPP_ERROR(
+      rclcpp::get_logger("L298NSystem"),
+      "pigpio daemon connection failed");
     return hardware_interface::CallbackReturn::ERROR;
   }
 
-  gpioSetMode(left_pwm_,  PI_OUTPUT);
-  gpioSetMode(left_in1_,  PI_OUTPUT);
-  gpioSetMode(left_in2_,  PI_OUTPUT);
+  // Настройка режимов
+  if (set_mode(pi_, left_pwm_, PI_OUTPUT) < 0 ||
+      set_mode(pi_, left_in1_, PI_OUTPUT) < 0 ||
+      set_mode(pi_, left_in2_, PI_OUTPUT) < 0 ||
+      set_mode(pi_, right_pwm_, PI_OUTPUT) < 0 ||
+      set_mode(pi_, right_in1_, PI_OUTPUT) < 0 ||
+      set_mode(pi_, right_in2_, PI_OUTPUT) < 0)
+  {
+    RCLCPP_ERROR(
+      rclcpp::get_logger("L298NSystem"),
+      "Failed to configure GPIO modes");
+    return hardware_interface::CallbackReturn::ERROR;
+  }
 
-  gpioSetMode(right_pwm_, PI_OUTPUT);
-  gpioSetMode(right_in1_, PI_OUTPUT);
-  gpioSetMode(right_in2_, PI_OUTPUT);
+  // Настройка PWM диапазона
 
-  // стоп по умолчанию
-  gpioPWM(left_pwm_,  0);
-  gpioPWM(right_pwm_, 0);
-  gpioWrite(left_in1_, 0);
-  gpioWrite(left_in2_, 0);
-  gpioWrite(right_in1_, 0);
-  gpioWrite(right_in2_, 0);
+  set_PWM_frequency(pi_, left_pwm_, 20000);
+  set_PWM_frequency(pi_, right_pwm_, 20000);
 
-  RCLCPP_INFO(rclcpp::get_logger("L298NSystem"), "L298N hardware activated");
+  set_PWM_range(pi_, left_pwm_,  pwm_max_);
+  set_PWM_range(pi_, right_pwm_, pwm_max_);
+
+  // Останов
+  set_PWM_dutycycle(pi_, left_pwm_,  0);
+  set_PWM_dutycycle(pi_, right_pwm_, 0);
+
+  gpio_write(pi_, left_in1_, 0);
+  gpio_write(pi_, left_in2_, 0);
+  gpio_write(pi_, right_in1_, 0);
+  gpio_write(pi_, right_in2_, 0);
+
+  RCLCPP_INFO(
+    rclcpp::get_logger("L298NSystem"),
+    "L298N hardware activated (daemon mode)");
+
   return hardware_interface::CallbackReturn::SUCCESS;
 }
 
-hardware_interface::CallbackReturn L298NSystem::on_deactivate(
-  const rclcpp_lifecycle::State &)
-{
-  gpioPWM(left_pwm_,  0);
-  gpioPWM(right_pwm_, 0);
 
-  gpioWrite(left_in1_, 0);
-  gpioWrite(left_in2_, 0);
-  gpioWrite(right_in1_, 0);
-  gpioWrite(right_in2_, 0);
-  
-  gpioTerminate();
-  RCLCPP_INFO(rclcpp::get_logger("L298NSystem"), "L298N hardware deactivated");
+  hardware_interface::CallbackReturn L298NSystem::on_deactivate(
+    const rclcpp_lifecycle::State &)
+  {
+    if (pi_ >= 0)
+    {
+      set_PWM_dutycycle(pi_, left_pwm_,  0);
+      set_PWM_dutycycle(pi_, right_pwm_, 0);
+
+      gpio_write(pi_, left_in1_, 0);
+      gpio_write(pi_, left_in2_, 0);
+      gpio_write(pi_, right_in1_, 0);
+      gpio_write(pi_, right_in2_, 0);
+
+      pigpio_stop(pi_);
+      pi_ = -1;
+    }
+
+  RCLCPP_INFO(rclcpp::get_logger("L298NSystem"),
+              "L298N hardware deactivated");
+
   return hardware_interface::CallbackReturn::SUCCESS;
 }
-
 void L298NSystem::set_motor(double vel_rad_s, int pwm, int in1, int in2)
 {
+  if (pi_ < 0)
+  return;
+
   bool forward = vel_rad_s >= 0.0;
   double norm = 0.0;
 
@@ -114,29 +168,43 @@ void L298NSystem::set_motor(double vel_rad_s, int pwm, int in1, int in2)
     norm = std::clamp(std::abs(vel_rad_s) / max_wheel_rad_s_, 0.0, 1.0);
   }
 
-  gpioWrite(in1, forward ? 1 : 0);
-  gpioWrite(in2, forward ? 0 : 1);
+  gpio_write(pi_, in1, forward ? 1 : 0);
+  gpio_write(pi_, in2, forward ? 0 : 1);
 
   int duty = static_cast<int>(norm * pwm_max_);
-  gpioPWM(pwm, duty);
+  set_PWM_dutycycle(pi_, pwm, duty);
 }
 
 hardware_interface::return_type L298NSystem::write(
   const rclcpp::Time &, const rclcpp::Duration &)
 {
+  if (pi_ < 0)
+    return hardware_interface::return_type::ERROR;
+
+  RCLCPP_INFO(logger_,
+            "WRITE left_cmd: %.3f  right_cmd: %.3f",
+            left_cmd_, right_cmd_);
+
   set_motor(left_cmd_,  left_pwm_,  left_in1_,  left_in2_);
   set_motor(right_cmd_, right_pwm_, right_in1_, right_in2_);
   return hardware_interface::return_type::OK;
 }
 
+
 hardware_interface::return_type L298NSystem::read(
-  const rclcpp::Time &, const rclcpp::Duration &)
+  const rclcpp::Time &, const rclcpp::Duration & period)
 {
-  // Без энкодеров: считаем, что достигли команды
+  double dt = period.seconds();
+
   left_state_  = left_cmd_;
   right_state_ = right_cmd_;
+
+  left_pos_  += left_state_  * dt;
+  right_pos_ += right_state_ * dt;
+
   return hardware_interface::return_type::OK;
 }
+
 
 }  // namespace l298n_hardware
 

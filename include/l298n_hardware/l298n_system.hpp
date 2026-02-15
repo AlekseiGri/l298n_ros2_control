@@ -5,6 +5,7 @@
 #include <rclcpp_lifecycle/state.hpp>
 #include <vector>
 #include <string>
+#include <rclcpp/rclcpp.hpp>
 
 namespace l298n_hardware
 {
@@ -13,6 +14,8 @@ class L298NSystem : public hardware_interface::SystemInterface
 {
 public:
   RCLCPP_SHARED_PTR_DEFINITIONS(L298NSystem)
+
+  int pi_{-1};
 
   hardware_interface::CallbackReturn on_init(
     const hardware_interface::HardwareInfo & info) override;
@@ -35,6 +38,8 @@ public:
     const rclcpp::Duration & period) override;
 
 private:
+
+  rclcpp::Logger logger_{rclcpp::get_logger("L298NSystem")};
   // GPIO pins
   int left_pwm_{-1}, left_in1_{-1}, left_in2_{-1};
   int right_pwm_{-1}, right_in1_{-1}, right_in2_{-1};
@@ -44,8 +49,14 @@ private:
   int pwm_max_{255};              // pigpio PWM: 0..255
 
   // command/state
-  double left_cmd_{0.0}, right_cmd_{0.0};
-  double left_state_{0.0}, right_state_{0.0};
+  double left_state_  = 0.0;
+  double right_state_ = 0.0;
+
+  double left_cmd_  = 0.0;
+  double right_cmd_ = 0.0;
+
+  double left_pos_  = 0.0;
+  double right_pos_ = 0.0;
 
   void set_motor(double vel_rad_s, int pwm, int in1, int in2);
 };

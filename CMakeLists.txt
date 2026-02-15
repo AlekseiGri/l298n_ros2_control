@@ -31,6 +31,17 @@ ament_target_dependencies(l298n_hardware
   # ros2_control
 )
 
+find_library(PIGPIOD_IF2_LIB pigpiod_if2)
+
+target_link_libraries(l298n_hardware
+  ${PIGPIOD_IF2_LIB}
+)
+
+# target_link_libraries(l298n_hardware
+#   pigpiod_if2
+#   pigpio
+# )
+
 # Export plugin description to pluginlib
 pluginlib_export_plugin_description_file(
   hardware_interface

@@ -30,6 +30,7 @@
   <test_depend>ament_lint_common</test_depend>
 
   <export>
+    <hardware_interface plugin="${prefix}/plugin_description.xml"/>
     <build_type>ament_cmake</build_type>
   </export>
 </package>
