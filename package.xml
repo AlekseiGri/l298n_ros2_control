@@ -2,13 +2,30 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>l298n_ros2_control</name>
-  <version>0.0.0</version>
-  <description>TODO: Package description</description>
+  <version>0.1.0</version>
+  <description>L298N hardware interface for ros2_control</description>
+
   <maintainer email="siming@todo.todo">siming</maintainer>
   <license>Apache-2.0</license>
 
+  <!-- Build system -->
   <buildtool_depend>ament_cmake</buildtool_depend>
 
+  <!-- Build dependencies -->
+  <build_depend>rclcpp</build_depend>
+  <build_depend>pluginlib</build_depend>
+  <build_depend>hardware_interface</build_depend>
+  <build_depend>controller_interface</build_depend>
+  <build_depend>ros2_control</build_depend>
+
+  <!-- Runtime dependencies -->
+  <exec_depend>rclcpp</exec_depend>
+  <exec_depend>pluginlib</exec_depend>
+  <exec_depend>hardware_interface</exec_depend>
+  <exec_depend>controller_interface</exec_depend>
+  <!-- <exec_depend>ros2_control</exec_depend> -->
+
+  <!-- Test -->
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
 

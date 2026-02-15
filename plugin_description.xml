@@ -1,0 +1,9 @@
+<library path="l298n_hardware">
+  <class name="l298n_hardware/L298NSystem"
+         type="l298n_hardware::L298NSystem"
+         base_class_type="hardware_interface::SystemInterface">
+    <description>
+      L298N ros2_control hardware interface
+    </description>
+  </class>
+</library>
