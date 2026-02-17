@@ -37,11 +37,6 @@ target_link_libraries(l298n_hardware
   ${PIGPIOD_IF2_LIB}
 )
 
-# target_link_libraries(l298n_hardware
-#   pigpiod_if2
-#   pigpio
-# )
-
 # Export plugin description to pluginlib
 pluginlib_export_plugin_description_file(
   hardware_interface
