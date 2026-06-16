@@ -176,8 +176,15 @@ namespace l298n_hardware
     gpio_write(pi_, in1, forward ? 1 : 0);
     gpio_write(pi_, in2, forward ? 0 : 1);
 
-    int duty = static_cast<int>(norm * pwm_max_);
+    // int duty = static_cast<int>(norm * pwm_max_);
+    const int min_pwm = 180;
+    int duty = 0;
+    if (norm > 0.0) {
+      duty = min_pwm + static_cast<int>(norm * (pwm_max_ - min_pwm));
+    }
+
     set_PWM_dutycycle(pi_, pwm, duty);
+    // RCLCPP_INFO(logger_, "vel: %.3f  duty: %d", vel_rad_s, duty);
   }
 
   // Write commands to hardware
@@ -187,9 +194,9 @@ namespace l298n_hardware
     if (pi_ < 0)
       return hardware_interface::return_type::ERROR;
 
-    RCLCPP_INFO(logger_,
-              "WRITE left_cmd: %.3f  right_cmd: %.3f",
-              left_cmd_, right_cmd_);
+    // RCLCPP_INFO(logger_,
+    //           "WRITE left_cmd: %.3f  right_cmd: %.3f",
+    //           left_cmd_, right_cmd_);
 
     set_motor(left_cmd_,  left_pwm_,  left_in1_,  left_in2_);
     set_motor(right_cmd_, right_pwm_, right_in1_, right_in2_);

@@ -45,7 +45,7 @@ namespace l298n_hardware
     int right_pwm_{-1}, right_in1_{-1}, right_in2_{-1};
 
     // params
-    double max_wheel_rad_s_{11.0};   // подстрой под моторы
+    double max_wheel_rad_s_{11.0};   // tune for your motors
     int pwm_max_{255};              // pigpio PWM: 0..255
 
     // command/state
